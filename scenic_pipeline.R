@@ -138,55 +138,9 @@ main <- function(args){
 if(!interactive()){
   main(getArgs())
 }
-# org <- "hgnc"
-# dbDir <- "../cisTarget_databases"
-# my.dataset.title <- "Scenic smol nucseq run"
-# data(defaultDbNames)
-# dbs <- defaultDbNames[[org]]
-# 
-# scenicOptions <- initializeScenic(org=org, dbDir="../cisTarget_databases",
-#                                   datasetTitle=my.dataset.title, nCores=15)
-# scenicOptions@inputDatasetInfo$cellInfo <- "int/cellInfo.Rds"
-# # scenicOptions@inputDatasetInfo$colVars <- "int/colVars.Rds"
-# # Save to use at a later time...
-# saveRDS(scenicOptions, file="int/scenicOptions.Rds")
-# 
-# genesKept <- geneFiltering(expr.mat, scenicOptions=scenicOptions,
-#                            minCountsPerGene=3*0.1*ncol(expr.mat),
-#                            minSamples=ncol(expr.mat) * 0.1)
-# 
-# saveRDS(genesKept, file="int/1.1_genesKept.Rds")
 
-# expr.mat.filtered <- expr.mat[genesKept, ]
-# 
-# corrMat <- cor(t(expr.mat.filtered), method="spearman")
-# saveRDS(corrMat, file=getIntName(scenicOptions, "corrMat"))
-# 
-# message("exporting for GRN_Boost")
-# exportsForArboreto(expr.mat.filtered, scenicOptions=scenicOptions)
 
-#### Run grnboost via python
-# system("module load python/3.7.2")
-# Running GRNBoost
-# message('...Running GRN Boost')
-# system("python3 grnboost_test.py")
-# 
-# # ### Run remaing deals
-# load("../../data/small_nucseq_cell_info.rdata")
-# load("../../data/small_nucseq_exp.rdata")
-# #
-# scenicOptions <- readRDS(file="int/scenicOptions.Rds")
-# #
-# grnboost.output <- importArboreto("int/1.2_grnoutput.txt")
-# colnames(grnboost.output) <- c("TF", "Target", "weight")
-# saveRDS(grnboost.output, file="int/1.4_GENIE3_linkList.Rds")
-# #
-# expr.mat.log <- log2(small.nucseq.exp+1)
-# runSCENIC_1_coexNetwork2modules(scenicOptions)
-# runSCENIC_2_createRegulons(scenicOptions)
-# runSCENIC_3_scoreCells(scenicOptions, as.matrix(expr.mat.log),
-#                        skipTsne=TRUE, skipHeatmap=TRUE)
-# 
+
 
 
 
