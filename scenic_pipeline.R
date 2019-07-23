@@ -6,9 +6,7 @@
 # Make sure to load:
 # module load R/3.5.0
 # module python/3.7.2
-# Rscript senic_pipeline/scenic_pipeline.R expression_matrix_rds cell_info_rds --cis_path --nCores 10 --title Scenic scBrain 
-
-# Rscript scenic_pipeline.R ../../data/nucseq_1k_ds_exp.rds ../../data/nucseq_clusters_1k.rds --cis_path ../cisTarget_databases --nCores 10 --title ScenicTestRun
+# Rscript scenic_pipeline.R expression_matrix_rds cell_info_rds --cis_path --nCores 10 --title ScenicSCBrain 
 
 # Requirements
 suppressPackageStartupMessages(library(Seurat))
@@ -137,10 +135,20 @@ main <- function(args){
   message("\nCreating regulons")
   runSCENIC_2_createRegulons(scenic.options)
   message("\nScoring cells")
-  runSCENIC_3_scoreCells(scenic.options, as.matrix(expr.mat.log),
-                         skipTsne=TRUE, skipHeatmap=TRUE)
-
+  runSCENIC_3_scoreCells(scenic.options, as.matrix(expr.mat.log), skipTsne=TRUE,
+                         skipHeatmap=TRUE, skipBinaryThresholds=TRUE)
+  
+  # make default thresholds (binarize mat)
+  cells.auc.thres <- NULL
+  regulon.auc <- readRDS(file=getIntName(scenic.options, "aucell_regulonAUC"))
+  cells.auc.thres <- AUCell_exploreThresholds(regulon.auc,
+                                              smallestPopPercent=getSettings(scenic.options,"aucell/smallestPopPercent"),
+                                              assignCells=TRUE, plotHist=FALSE,
+                                              verbose=FALSE, nCores=args$nCores)
+  
+  saveRDS(cells.auc.thres, file=getIntName(scenic.options, "aucell_thresholds"))
   message("\nProcess Complete!")
+  
 }
 
 if(!interactive()){
