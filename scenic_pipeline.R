@@ -3,7 +3,7 @@
 # scenic_pipeline.R
 # Running the scenic pipeline
 
-# Make sure to do:
+# Make sure to load:
 # module load R/3.5.0
 # module python/3.7.2
 # Rscript senic_pipeline/scenic_pipeline.R expression_matrix_rds cell_info_rds --cis_path --nCores 10 --title Scenic scBrain 
