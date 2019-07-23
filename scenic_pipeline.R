@@ -6,13 +6,14 @@
 # Make sure to do:
 # module load R/3.5.0
 # module python/3.7.2
-# Rscript scenic_pipeline.R expression_matrix_rds cell_info_rds db_path --nCores 10 --title Scenic scBrain 
+# Rscript senic_pipeline/scenic_pipeline.R expression_matrix_rds cell_info_rds --cis_path --nCores 10 --title Scenic scBrain 
 
+# Rscript scenic_pipeline.R ../../data/nucseq_1k_ds_exp.rds ../../data/nucseq_clusters_1k.rds --cis_path ../cisTarget_databases --nCores 10 --title ScenicTestRun
 
 # Requirements
 suppressPackageStartupMessages(library(Seurat))
 library(argparse)
-library(AUCell)
+suppressPackageStartupMessages(library(AUCell))
 library(SCENIC)
 library(reticulate)
 # Required for running on hoffman
@@ -24,22 +25,25 @@ options(stringsAsFactors=FALSE)
 getArgs <- function(){
   parser <- ArgumentParser(description='Rscript to run SCENIC on human single cell data')
   parser$add_argument('expression_mat_rds', help=paste0('Path to expression matrix rds file (genes by cells)',
-                                  ' Genes as rownames and Cells as colnames') )
+                                  ' Genes as rownames and Cells as colnames'),
+                      default=NULL )
   parser$add_argument('cell_info_rds', 
-                      help=paste0('Path to cell info rds (clusters with cells as rownames)'))
-  parser$add_argument('db_path', 
-                      help=paste0('Put path to cis Target pathway,(e.g. ~/home/scenci/cisTarget_databases)'))
+                      help=paste0('Path to cell info rds file (clusters with cells as rownames)'),
+                      default=NULL)
+  parser$add_argument('--cis_path', 
+                      help=paste0('Path to cis Target pathway directory(e.g. ~/home/scenic/cisTarget_databases)'),
+                      default='cisTarget_databases')
   parser$add_argument('--nCores', 
                       help=paste0('Number of cores to use'), type="integer", default=1)
-  parser$add_argument('--title', help=paste0('add project title name'))
+  parser$add_argument('--title', help=paste0('add project title name'),default="SCENIC Exp")
   
-  parser$add_argument('--min_counts_gene', help=paste0('Filter by the total number of reads per gene.',
+  parser$add_argument('--min_counts_gene', help=paste0('Filter by the total number of reads per gene. ',
                                                        'By default it keeps only the genes with at least',
-                                                       ' 6 UMI counts across all samples '))
-  parser$add_argument('--min_samples', help=paste0('Filter by the number of cells in which the gene is',
-                                                   'detected** (e.g. >0 UMI, or >1 log2(CPM)).',
-                                                   'By default genes that are detected in at least 1%',
-                                                   ' of the cells are kept'))
+                                                       ' 6 UMI counts across all samples '),
+                      default=NULL)
+  parser$add_argument('--min_samples', 
+                      help=paste0('Filter by the number of cells in which the gene is detected'),
+                      default=NULL)
   parser$parse_args()
 }
 
@@ -57,39 +61,39 @@ main <- function(args){
   if(is.null(args)){
     stop('Need to pass arguments!')
   }
-  message("Initializing...")
+  message("\nInitializing...")
   createDirs()
+  message("  ...reading in files")
   expr.mat <- readRDS(file=args$expression_mat_rds)
-  cell.info <- readRDS(file=argscell_info_rds)
-  
+  cell.info <- readRDS(file=args$cell_info_rds)
   # Catch and formating
   if(ncol(expr.mat) != nrow(cell.info)){
     stop('Number of cells in two files does not match!')
   }
   if(grepl("\\.",colnames(expr.mat)[1])){
-    colnames(expr.mat) <- sapply(colnames(mat.expr), function(x) gsub("\\.", "-", x))
+    colnames(expr.mat) <- sapply(colnames(expr.mat), function(x) gsub("\\.", "-", x))
   }
   if(grepl("\\.",rownames(cell.info)[1] )){
     rownames(cell.info) <- sapply(rownames(cell.info), function(x) gsub("\\.", "-", x) )
   }
-  if(all.equal(colnames(expr.mat),rownames(cell.info) )){
+  if( !all.equal(colnames(expr.mat),rownames(cell.info)) ){
     stop('cell names from expression matrix and cell info do not match!')
   }
-  
+
   colnames(cell.info)[1] <- "cluster"
   cell.info$nGene <- apply(expr.mat, 2, function(c) sum(c!=0))
   cell.info$nUMI <- apply(expr.mat, 2, sum)
   saveRDS(cell.info, file="int/cellInfo.Rds") # save cell info for later
-  
+
   data(defaultDbNames)
   dbs <- defaultDbNames[["hgnc"]]
   s.title <- ifelse(!is.null(args$title), "Scenic Analysis", args$title)
 
-  scenic.options <- initializeScenic(org="hgnc", dbDir=args$db_path,
-                                     datasetTitle=s.title, nCores=nCores)
-  scenicOptions@inputDatasetInfo$cellInfo <- "int/cellInfo.Rds"
-  saveRDS(scenicOptions, file="int/scenicOptions.Rds")
-  
+  scenic.options <- initializeScenic(org="hgnc", dbDir=args$cis_path,
+                                     datasetTitle=s.title, nCores=args$nCores)
+  scenic.options@inputDatasetInfo$cellInfo <- "int/cellInfo.Rds"
+  saveRDS(scenic.options, file="int/scenicOptions.Rds")
+
   message("  Saving scenic options")
   # min_counts_gene min_samples
   if(!is.null(args$min_counts_gene)){
@@ -102,43 +106,47 @@ main <- function(args){
   } else{
     min.samples <- args$min_samples
   }
-  
+
   message("...Filtering genes")
-  genes.kept <- geneFiltering(expr.mat, scenicOptions=scenicOptions,
+  genes.kept <- geneFiltering(expr.mat, scenicOptions=scenic.options,
                              minCountsPerGene=3*0.1*ncol(expr.mat),
                              minSamples=ncol(expr.mat) * 0.1)
   saveRDS(genes.kept, file="int/1.1_genesKept.Rds")
   message("   Total kept genes: ", genes.kept)
-  
+
   message("   Running correlation matrix")
-  expr.mat.filtered <- expr.mat[genesKept, ]
-  corrMat <- cor(t(expr.mat.filtered), method="spearman")
-  saveRDS(corrMat, file=getIntName(scenicOptions, "corrMat"))
-  
+  expr.mat.filtered <- expr.mat[genes.kept, ]
+  corr.mat <- cor(t(expr.mat.filtered), method="spearman")
+  saveRDS(corr.mat, file=getIntName(scenic.options, "corrMat"))
+
   message("   exporting for GRNBoost!")
-  exportsForArboreto(expr.mat.filtered, scenicOptions=scenicOptions)
+  exportsForArboreto(expr.mat.filtered, scenicOptions=scenic.options)
   message("\nGRNBoost")
-  py_run_file("../scenic_pipeline/grn_boost.py")
-  
+  get.pyfile <- list.files(pattern = "grn_boost.py$", recursive = TRUE)
+  if(is.null(get.pyfile)){
+    stop("Cant find grn_boost.py!")
+  }
+  py_run_file(get.pyfile)
+
   grnboost.output <- importArboreto("int/1.2_grnoutput.txt")
   colnames(grnboost.output) <- c("TF", "Target", "weight")
   saveRDS(grnboost.output, file="int/1.4_GENIE3_linkList.Rds")
   message("\nCreating coexpression newtork modules")
-  expr.mat.log <- log2(small.nucseq.exp+1)
-  runSCENIC_1_coexNetwork2modules(scenicOptions)
+  expr.mat.log <- log2(expr.mat + 1)
+  runSCENIC_1_coexNetwork2modules(scenic.options)
   message("\nCreating regulons")
-  runSCENIC_2_createRegulons(scenicOptions)
+  runSCENIC_2_createRegulons(scenic.options)
   message("\nScoring cells")
-  runSCENIC_3_scoreCells(scenicOptions, as.matrix(expr.mat.log),
+  runSCENIC_3_scoreCells(scenic.options, as.matrix(expr.mat.log),
                          skipTsne=TRUE, skipHeatmap=TRUE)
-  
+
   message("\nProcess Complete!")
 }
 
 if(!interactive()){
-  main(getArgs())
+  args <- getArgs()
+  main(args)
 }
-
 
 
 
