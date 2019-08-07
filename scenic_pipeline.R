@@ -95,20 +95,20 @@ main <- function(args){
   message("  Saving scenic options")
   # min_counts_gene min_samples
   if(!is.null(args$min_counts_gene)){
-    min.counts.gene <- args$min_count_gene
+    min.counts.gene <- args$min_counts_gene
   }else{
     min.counts.gene <- 3*0.1*ncol(expr.mat)
   }
   if(!is.null(args$min_samples)){
-    min.samples <- ncol(expr.mat) * 0.1
-  } else{
     min.samples <- args$min_samples
+  } else{
+    min.samples <- ncol(expr.mat) * 0.1
   }
 
   message("...Filtering genes")
   genes.kept <- geneFiltering(expr.mat, scenicOptions=scenic.options,
-                             minCountsPerGene=3*0.1*ncol(expr.mat),
-                             minSamples=ncol(expr.mat) * 0.1)
+                             minCountsPerGene=min.counts.gene,
+                             minSamples=min.samples)
   saveRDS(genes.kept, file="int/1.1_genesKept.Rds")
   message("   Total kept genes: ", genes.kept)
 
@@ -125,7 +125,9 @@ main <- function(args){
     stop("Cant find grn_boost.py!")
   }
   py_run_file(get.pyfile)
-
+  
+  # Update the file columns and names so GRNBoost output works with the 
+  # rest of the scenic pipeline. Fix since not using GENIE3
   grnboost.output <- importArboreto("int/1.2_grnoutput.txt")
   colnames(grnboost.output) <- c("TF", "Target", "weight")
   saveRDS(grnboost.output, file="int/1.4_GENIE3_linkList.Rds")
@@ -138,7 +140,11 @@ main <- function(args){
   runSCENIC_3_scoreCells(scenic.options, as.matrix(expr.mat.log), skipTsne=TRUE,
                          skipHeatmap=TRUE, skipBinaryThresholds=TRUE)
   
-  # make default thresholds (binarize mat)
+  # Make some space
+  rm(expr.mat.log)
+  rm(expr.mat)
+  gc(verbose=FALSE)
+  # make default thresholds (binarize matrix)
   cells.auc.thres <- NULL
   regulon.auc <- readRDS(file=getIntName(scenic.options, "aucell_regulonAUC"))
   cells.auc.thres <- AUCell_exploreThresholds(regulon.auc,
